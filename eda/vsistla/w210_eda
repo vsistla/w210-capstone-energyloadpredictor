@@ -1,0 +1,200 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[19]:
+
+
+import sys
+get_ipython().system('{sys.executable} -m pip install seaborn')
+
+
+# In[20]:
+
+
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from datetime import datetime
+from pandas.tseries.holiday import USFederalHolidayCalendar as calendar
+
+
+# In[22]:
+
+
+# read csv files
+df_west_raw = pd.read_csv('../../data/west_interval_data_01-29-2019_01-27-2021.csv')
+df_east_raw = pd.read_csv('../../data/east_interval_data_01-29-2019_01-27-2021.csv')
+
+
+# In[23]:
+
+
+df_west_raw.count()
+
+
+# In[26]:
+
+
+def clean_data(data):
+  df = data.copy(deep=True)
+
+  # drop columns
+  df = df.drop(columns=['Usage Unit', 'Currency Unit', 'Temperature Unit', 'Demand Unit'])
+
+  # mapper for column rename
+  rename_mapper = {'Service Agreement':'service',
+                 'Start Date Time':'start',
+                 'End Date Time':'end',
+                 'Usage':'usage',
+                 'Cost':'cost',
+                 'Avg. Temperature':'temp',
+                 'Event Flags':'event_flag',
+                 'Peak Demand':'demand'}
+  # rename columns
+  df = df.rename(mapper=rename_mapper, axis='columns')
+
+  # convert columns to datetime
+  df.start, df.end = pd.to_datetime(df.start), pd.to_datetime(df.end)
+
+  return df
+
+
+# In[27]:
+
+
+df_west_clean = clean_data(df_west_raw)
+df_west_clean.head()
+
+
+# In[28]:
+
+
+plt.rcParams['figure.figsize'] = (50, 20)
+fig, ax = plt.subplots()
+
+# add the time-series for "relative_temp" to the plot
+ax.plot(df_west_clean.start, df_west_clean.demand)
+
+# set title
+ax.set_title("Electrical Demand Time Series", fontsize=22)
+
+# set x-axis label
+ax.set_xlabel("Time", fontsize=18)
+
+# set y-axis label
+ax.set_ylabel("Demand (kW)", fontsize=18)
+
+# set xtick label
+plt.xticks(fontsize=16)
+
+# set ytick label
+plt.yticks(fontsize=16)
+
+ax.grid()
+
+plt.show()
+
+
+# In[29]:
+
+
+sns.set_style("whitegrid")
+p = sns.lineplot(data=df_west_clean, x='start', y='demand')
+p.set_title('Electrical Demand Time Series', fontsize=22)
+p.set_xlabel('Time', fontsize=18)
+p.set_ylabel('Demand (kW)', fontsize=18)
+plt.show()
+
+
+# In[30]:
+
+
+df_west_clean.head()
+
+
+# In[31]:
+
+
+def feature_engineering(data):
+  df = data.copy(deep=True)
+
+  df['hour'] = df.start.dt.hour
+  df['day'] = df.start.dt.dayofweek
+  df['week'] = df.start.dt.isocalendar().week
+  df['month'] = df.start.dt.month
+  df['year'] = df.start.dt.year
+  df['date'] = df.start.dt.date
+  holidays = calendar().holidays(start=df.date.min(), end=df.date.max()).date
+  df['holidays'] = df.date.isin(holidays)
+
+  return df
+
+
+# In[32]:
+
+
+df = feature_engineering(df_west_clean)
+df.head()
+
+
+# In[33]:
+
+
+plt.rcParams['figure.figsize'] = (12, 8)
+df[['day', 'demand']].groupby('day').mean().plot(kind='bar')
+plt.title('Avg. Electrical Demand by Day')
+plt.xlabel('Day')
+plt.ylabel("Demand (kW)")
+plt.show()
+
+
+# In[34]:
+
+
+plt.rcParams['figure.figsize'] = (12, 8)
+df[['month', 'demand']].groupby('month').mean().plot(kind='bar')
+plt.title('Avg. Electrical Demand by Month')
+plt.xlabel('Month')
+plt.ylabel("Demand (kW)")
+plt.show()
+
+
+# In[35]:
+
+
+plt.rcParams['figure.figsize'] = (30, 8)
+df[['week', 'demand']].groupby('week').mean().plot(kind='bar')
+plt.title('Avg. Electrical Demand by Week')
+plt.xlabel('Week')
+plt.ylabel("Demand (kW)")
+plt.show()
+
+
+# ### Usage vs Temp Analysis
+
+# In[39]:
+
+
+df_usage_temp = df[['usage', 'temp']]
+
+
+# In[40]:
+
+
+df_usage_temp.head
+
+
+# In[41]:
+
+
+plt.rcParams['figure.figsize'] = (12, 8)
+df[['usage', 'temp']].groupby('temp').mean().plot(kind='bar')
+plt.title('Avg. Electrical Demand by Temp')
+plt.xlabel('Temperature')
+plt.ylabel("Demand (kW)")
+plt.show()
+
+
+# In[ ]:
+
+
