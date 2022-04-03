@@ -1,1 +1,30 @@
- 
+###################################################
+# Building, tagging, and running a docker container
+
+# build docker container with tag -t from file -f
+docker build -t mg01-inference-60m:latest -f Dockerfile.mg01-inferecne-60m .
+
+# run docker container
+docker run -it --rm --pid=host mg01-inference-60m
+
+# loop run docker container from commnad line
+for i in `seq 1 10`; do; docker run -it --rm --pid=host mg01-inference-60m; done
+
+########################
+# Pushing a docker image
+
+# authenticate docker to an amazon ecr
+aws ecr get-login-password --region region | docker login --username AWS --password-stdin aws_account_id.dkr.ecr.region.amazonaws.com
+aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 207590433046.dkr.ecr.us-west-2.amazonaws.com
+
+# tag image
+docker tag e9ae3c220b23 aws_account_id.dkr.ecr.region.amazonaws.com/my-repository:tag
+docker tag 2d81d8908d9f 207590433046.dkr.ecr.us-west-2.amazonaws.com/ipowermigrid:mg01-inference-15m
+
+
+#push image
+docker push aws_account_id.dkr.ecr.region.amazonaws.com/my-repository:tag
+docker push 207590433046.dkr.ecr.us-west-2.amazonaws.com/ipowermigrid:mg01-inference-15m
+
+# remove image by name
+docker rmi repository:tag
