@@ -3,12 +3,17 @@
 
 # build docker container with tag -t from file -f
 docker build -t mg01-inference-60m:latest -f Dockerfile.mg01-inferecne-60m .
+docker build -t mg01-inference-hr-24:latest -f Dockerfile.mg01-inference-hr-24 .
+docker build -t mg01-inference-monthly:latest -f Dockerfile.mg01-inference-monthly .
 
-# run docker container
+# run docker container from commnad line
 docker run -it --rm --pid=host mg01-inference-60m
+docker run -it --rm --pid=host mg01-inference-hr-24
+docker run -it --rm --pid=host mg01-inference-monthly
 
 # loop run docker container from commnad line
 for i in `seq 1 10`; do; docker run -it --rm --pid=host mg01-inference-60m; done
+for i in `seq 1 10`; do; docker run -it --rm --pid=host mg01-inference-hr-24; done
 
 ########################
 # Pushing a docker image
