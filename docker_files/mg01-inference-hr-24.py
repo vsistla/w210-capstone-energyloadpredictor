@@ -1,3 +1,6 @@
+#########################
+# import library/packages
+#########################
 import numpy as np
 import pandas as pd
 import os
@@ -19,6 +22,9 @@ import boto3
 import joblib
 import time
 
+#######################
+# load models and files
+#######################
 aws_access_key_id = 'AKIATAVK2UELBEVSLANM'
 aws_secret_access_key = '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'
 
@@ -39,13 +45,20 @@ with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     rf_model = joblib.load(fp)
-
-# 'xgboost_model_24h.joblib'    
-key = 'randomforest_model_24h.joblib'
+    
+key = 'xgboost_model_24h.joblib'
 with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     xgb_model = joblib.load(fp)
+    
+# xgb_label_encoder load 
+key = 'xgb_label_encoder-hr-24.pkl'
+# read model from S3 bucket
+with tempfile.TemporaryFile() as fp:
+    s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
+    fp.seek(0)
+    lbl = joblib.load(fp)
 
 key = 'knnr_model_24h.joblib'
 with tempfile.TemporaryFile() as fp:
@@ -58,7 +71,19 @@ with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     svr_model = joblib.load(fp)
+       
+key = 'svr_X_standardscalar-hr-24.pkl'
+with tempfile.TemporaryFile() as fp:
+    s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
+    fp.seek(0)
+    sc_X = joblib.load(fp)
     
+key = 'svr_y_standardscalar-hr-24.pkl'
+with tempfile.TemporaryFile() as fp:
+    s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
+    fp.seek(0)
+    sc_y = joblib.load(fp)
+       
 key = 'ensemble_model_24h.joblib'
 with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
@@ -66,6 +91,9 @@ with tempfile.TemporaryFile() as fp:
     ensemble_model = joblib.load(fp)
 
 
+###########
+# inference
+###########
 
 # connect to sql database
 credentials = 'mysql://capstone_user:Capstone22!@capstone-database.czwmid1hzf1x.us-west-2.rds.amazonaws.com/mysqldb'
@@ -80,49 +108,14 @@ mydb = mysql.connector.connect(
 mycursor = mydb.cursor()
 
 # set params
-####################################
 mg_id = 'mg_01'
 
 params = {
     'mg_id':mg_id
 }
-####################################
-actuals = pd.read_sql('''SELECT * FROM microgrid_actuals_hr_24 WHERE id = %(mg_id)s''', 
-                                      con=credentials, params=params)
-
-# set prediction month
-actuals['month'] = actuals['end'].dt.strftime('%b')
-lower_ma = [m.lower() for m in month_abbr]
-actuals['month_int'] = actuals['month'].str.lower().map(lambda m: lower_ma.index(m)).astype('Int8')
-actuals['day_of_week'] = actuals['end'].dt.day_name()
-actuals['day_of_week_int'] = actuals['end'].dt.day_of_week
-date_range = pd.date_range(start='2019-01-01', end='2022-01-27')
-cal = calendar()
-holidays = cal.holidays(start=date_range.min(), end=date_range.max())
-actuals['holiday'] = actuals['end'].dt.date.astype('datetime64').isin(holidays)
-actuals["holiday_int"] = actuals["holiday"].astype(int)
-actuals = actuals[['end', 'id',  'month_int', 'day_of_week_int', 'holiday_int', 'demand', 'temp', 'humidity']].copy()
-
-for i in range(1, 10):
-    actuals["demand_lag_{}".format(i)] = actuals['demand'].shift(i)
-    actuals["temp_lag_{}".format(i)] = actuals['temp'].shift(i)
-    actuals["humidity_lag_{}".format(i)] = actuals['humidity'].shift(i)
-    
-y_actuals = actuals.dropna()['demand']
-y_actuals = y_actuals.values.reshape((len(y_actuals),1))
-
-
-X_actuals = actuals.dropna().drop(['end', 'id','demand', 'temp', 'humidity'], axis=1)
-
-sc_X = StandardScaler()
-sc_y = StandardScaler()
-X_actuals_scaled = sc_X.fit_transform(X_actuals)
-y_actuals_scaled = sc_y.fit_transform(y_actuals)
-
-
 
 def lagged_data_pred(df, lags):
-    df = df#[['end','id', 'demand', 'temp', 'humidity']]
+    df = df
     for i in range(1, lags):
         df["demand_lag_{}".format(i)] = df['demand'].shift(i)
         df["temp_lag_{}".format(i)] = df['temp'].shift(i)
@@ -139,6 +132,14 @@ def ModelPredictions(model, X_pred, mg_id):
                        })    
     return results
 
+def XGBModelPredictions(model, X_pred, mg_id, time_index):
+    prediction = model.predict(X_pred)
+    results = pd.DataFrame({'end':time_index,
+                            'id':mg_id,
+                            'demand':prediction
+                           }) 
+    return results
+
 def SVRModelPredictions(model, X_pred, mg_id, time_index):
     prediction = model.predict(X_pred)
     prediction = prediction.reshape((1,-1))
@@ -149,9 +150,10 @@ def SVRModelPredictions(model, X_pred, mg_id, time_index):
                            }) 
     return results
 
-def inference(mg_id, params=params):
+
+def inference_hr_24(mg_id, params=params):
     tail = pd.read_sql('''SELECT * FROM microgrid_actuals_hr_24 WHERE id = %(mg_id)s ORDER BY end DESC LIMIT 10''', 
-                                          con=credentials, params=params)
+                                              con=credentials, params=params)
     # invert the data frame
     tail = tail.iloc[::-1]
     # select the lastest date in the actuals table
@@ -184,18 +186,18 @@ def inference(mg_id, params=params):
     lr_X_pred = lr_pred.drop(['id','demand', 'temp', 'humidity'], axis=1)
     rf_X_pred = rf_pred.drop(['id','demand', 'temp', 'humidity'], axis=1)
     xgb_X_pred = xgb_pred.drop(['id','demand', 'temp', 'humidity'], axis=1)
+    xgb_X_pred = xgb_X_pred.loc[:, xgb_X_pred.columns != 'end'].astype(float, errors = 'raise')
+    xgb_X_pred['month_int'] = lbl.transform(xgb_pred['month_int'].astype(str))
     knn_X_pred = knn_pred.drop(['id','demand', 'temp', 'humidity'], axis=1)
     svr_X_pred = svr_pred.drop(['end','id','demand', 'temp', 'humidity'], axis=1)
     svr_X_pred_scaled = sc_X.transform(svr_X_pred)
 
     # # prediction results
-    # #.rename(columns={"demand": "lr_demand"})
     lr_results = ModelPredictions(lr_model, lr_X_pred, mg_id).set_index('end').rename(columns={"demand": "lr_demand"}) 
     rf_results = ModelPredictions(rf_model, rf_X_pred, mg_id).set_index('end').rename(columns={"demand": "rf_demand"}) 
-    xgb_results = ModelPredictions(xgb_model, xgb_X_pred, mg_id).set_index('end').rename(columns={"demand": "xgb_demand"}) 
+    xgb_results = XGBModelPredictions(xgb_model, xgb_X_pred, mg_id, tail['end'].iloc[-1]).set_index('end').rename(columns={"demand": "xgb_demand"})
     knn_results = ModelPredictions(knn_model, knn_X_pred, mg_id).set_index('end').rename(columns={"demand": "knn_demand"}) 
-    svr_results = SVRModelPredictions(svr_model, svr_X_pred_scaled, mg_id, tail['end'].iloc[-1]).set_index('end').rename(columns={"demand": "svr_demand"}).rename(columns={"demand": "svr_demand"}) 
-
+    svr_results = SVRModelPredictions(svr_model, svr_X_pred_scaled, mg_id, tail['end'].iloc[-1]).set_index('end').rename(columns={"demand": "svr_demand"}) 
 
     # # combine data sets
     frames = [lr_results.lr_demand, rf_results.rf_demand, xgb_results.xgb_demand, knn_results.knn_demand, svr_results.svr_demand]
@@ -205,10 +207,8 @@ def inference(mg_id, params=params):
     ensemble_X_pred['holiday_int'] = tail.iloc[-1].holiday_int
 
     # ensemble pred result
-    ensemble_X_pred
     ensemble_X_pred.reset_index(inplace=True)
     ensemble_results = ModelPredictions(ensemble_model, ensemble_X_pred, mg_id)
-
     ensemble_results.to_sql('microgrid_predictions_hr_24', con=credentials, if_exists='append', index=False)
 
     # time.sleep(5)
@@ -224,5 +224,5 @@ def inference(mg_id, params=params):
 
 i = 0
 while i < 1:
-    inference(mg_id)
+    inference_hr_24(mg_id)
     i+=1    
