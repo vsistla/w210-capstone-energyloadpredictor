@@ -20,7 +20,7 @@ s3_client = boto3.client('s3',
                          aws_access_key_id=aws_access_key_id, 
                          aws_secret_access_key=aws_secret_access_key)
 bucket_name = 'mg01-models'
-key = 'linear_model_60m.pkl'
+key = 'linear_model_15m.pkl'
 
 # read from 
 with tempfile.TemporaryFile() as fp:
