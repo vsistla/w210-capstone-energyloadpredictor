@@ -21,6 +21,7 @@ import tempfile
 import boto3
 import joblib
 import time
+print("packages loaded")
 
 #######################
 # load models and files
@@ -39,18 +40,21 @@ with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     lr_model = joblib.load(fp)
+print("lr_model loaded")
 
 key = 'randomforest_model_24h.joblib'
 with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     rf_model = joblib.load(fp)
+    print("rf_model loaded")
     
 key = 'xgboost_model_24h.joblib'
 with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     xgb_model = joblib.load(fp)
+    print("xgb_model loaded")
     
 # xgb_label_encoder load 
 key = 'xgb_label_encoder-hr-24.pkl'
@@ -59,36 +63,42 @@ with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     lbl = joblib.load(fp)
+    print("xgb_label_encoder loaded")
 
 key = 'knnr_model_24h.joblib'
 with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     knn_model = joblib.load(fp)
+    print("knnr_model loaded")
     
 key = 'svr_model_24h.joblib'
 with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     svr_model = joblib.load(fp)
+    print("svr_model loaded")
        
 key = 'svr_X_standardscalar-hr-24.pkl'
 with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     sc_X = joblib.load(fp)
-    
+    print("svr_X loaded")
+
 key = 'svr_y_standardscalar-hr-24.pkl'
 with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     sc_y = joblib.load(fp)
+    print("svr_y loaded")
        
 key = 'ensemble_model_24h.joblib'
 with tempfile.TemporaryFile() as fp:
     s3_client.download_fileobj(Fileobj=fp, Bucket=bucket_name, Key=key)
     fp.seek(0)
     ensemble_model = joblib.load(fp)
+    print("ensemble_model loaded")
 
 
 ###########
